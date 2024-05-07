@@ -1,9 +1,16 @@
 [tool.poetry]
-name = "agentartificial"
+name = "Cellium Client"
 version = "0.1.0"
-description = "Agent Artificial's OpenAI compatible api client"
-authors = ["Richard <richard@agentartificial.com>"]
+description = "Inference client for the Cellium Network. Created by Agent Artificial. Based on OpenAI's API Client."
+authors = [
+    "Richard Porteous <richard@agentartificial.com>"
+    ]
 readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+    ]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -12,7 +19,6 @@ python-dotenv = "^1.0.1"
 websocket = "^0.2.1"
 httpx = "^0.27.0"
 loguru = "^0.7.2"
-
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.4.2"
