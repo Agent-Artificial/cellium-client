@@ -1,0 +1,10 @@
+openai
+python-dotenv
+fastapi
+uvicorn
+requests
+loguru
+
+#development
+#black
+#pytest
