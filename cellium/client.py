@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from openai import OpenAI
 from websocket import WebSocket
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Union, Any, Callable
+from typing import Dict, List, Optional, Union, Any, Callable, Generator
 
 from dotenv import load_dotenv
 
@@ -15,14 +15,14 @@ MappingIntStrAny = typing.Union[typing.Mapping[int, Any], typing.Mapping[str, An
 
 load_dotenv()
 
-AGENTARTIFICIAL_URL = str(os.getenv("AGENTARTIFICIAL_URL"))
-OPENAI_URL = str(os.getenv("OPENAI_URL"))
+AGENTARTIFICIAL_URL = str(object=os.getenv(key="AGENTARTIFICIAL_URL"))
+OPENAI_URL = str(object=os.getenv(key="OPENAI_URL"))
 
-AGENTARTIFICIAL_API_KEY = str(os.getenv("AGENTARTIFICIAL_API_KEY"))
-OPENAI_API_KEY = str(os.getenv("OPENAI_API_KEY"))
+AGENTARTIFICIAL_API_KEY = str(object=os.getenv(key="AGENTARTIFICIAL_API_KEY"))
+OPENAI_API_KEY = str(object=os.getenv(key="OPENAI_API_KEY"))
 
-AGENTARTIFICIAL_MODEL = str(os.getenv("AGENTARTIFICIAL_MODEL"))
-OPENAI_MODEL = str(os.getenv("OPENAI_MODEL"))
+AGENTARTIFICIAL_MODEL = str(object=os.getenv(key="AGENTARTIFICIAL_MODEL"))
+OPENAI_MODEL = str(object=os.getenv(key="OPENAI_MODEL"))
 
 openai = OpenAI(api_key=AGENTARTIFICIAL_API_KEY, base_url=AGENTARTIFICIAL_URL)
 
@@ -30,18 +30,18 @@ openai = OpenAI(api_key=AGENTARTIFICIAL_API_KEY, base_url=AGENTARTIFICIAL_URL)
 class Completion(BaseModel):
     create: Callable
 
-    def __init_subclass__(cls, create, **kwargs: Any):
+    def __init_subclass__(cls, create, **kwargs: Any) -> None:
         cls.create = create(**kwargs)
 
 
 class Chat(BaseModel):
     completions: Completion
 
-    def __init_subclass__(cls, completions, **kwargs: Any):
+    def __init_subclass__(cls, completions, **kwargs: Any) -> None:
         cls.completions = completions(**kwargs)
 
 
-class Agent(BaseModel, ABC):
+class Client(BaseModel, ABC):
     openai: OpenAI
     agent_url: str
     agent_api_key: str
@@ -59,7 +59,7 @@ class Agent(BaseModel, ABC):
     chat: Chat
     is_inference: bool
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    __pydantic_fields_set__ = {"is_inference"}
+    __pydantic_fields_set__: set[str] = {"is_inference"}
 
     @abstractmethod
     def choose_model(self) -> Union[str, None]:
@@ -80,7 +80,7 @@ class Agent(BaseModel, ABC):
         """
 
 
-class AgentArtificial(Agent):
+class CelliumClient(Client):
     """
     The AgentArtificial class is a child class of the OpenAI class that enables
     the user to make inferences with the Agent Artificial API endpoints for
@@ -103,11 +103,11 @@ class AgentArtificial(Agent):
     Example:
         import os
         from dotenv import load_dotenv
-        from agentartificial import AgentArtificial
+        from cellium.client import CelliumClient
 
         load_dotenv()
 
-        client = AgentArtificial()
+        client = CelliumClient()
 
 
         response = client.chat.completions.create(
@@ -123,7 +123,7 @@ class AgentArtificial(Agent):
 
     def __init__(self) -> None:
         """
-        Initializes the AgentArtificial object by setting various attributes such as agent_url, agent_api_key, agent_model, openai_url, openai_api_key, openai_model, web_socket, openai, is_inference, url, api, and model.
+        Initializes the CelliumClient object by setting various attributes such as agent_url, agent_api_key, agent_model, openai_url, openai_api_key, openai_model, web_socket, openai, is_inference, url, api, and model.
         """
         self.agent_url = AGENTARTIFICIAL_URL
         self.agent_api_key = AGENTARTIFICIAL_API_KEY
@@ -156,42 +156,69 @@ class AgentArtificial(Agent):
             chat=self.chat,
         )
 
-    def create(self, **kwargs):  # -> Generator[Any, Any, None] | Any:
+    def create(
+        self, **kwargs
+    ) -> Generator[Any, Any, None] | Any:  # -> Generator[Any, Any, None] | Any:
+        """
+        Generates responses based on the input messages. If inference is enabled, uses the generate method to create responses, otherwise delegates to the openai chat completions. Raises a ValueError if no inference is available.
+        """
         if self.is_inference:
             messages: List[Dict[str, str]] = kwargs["messages"]
-            return self.generate(messages)
+            return self.generate(messages=messages)
         else:
             if self.openai:
                 return self.openai.chat.completions.create(**kwargs)
         raise ValueError("No inference available")
 
-    def generate(self, messages: List[Dict[str, str]]):
-        prompt = self.create_prompt(messages)
-        url = (f"{self.agent_url}/api/v2/generate",)
-        preflight = {
+    def generate(
+        self, messages: List[Dict[str, str]]
+    ) -> typing.Generator[Any, Any, None]:
+        """
+        Generates responses based on the input messages.
+
+        Args:
+            messages (List[Dict[str, str]]): A list of dictionaries representing messages. Each dictionary should have the keys 'role' and 'content', where 'role' is the role of the message sender and 'content' is the content of the message.
+
+        Yields:
+            JSON: A JSON object representing the response message.
+
+        Raises:
+            HTTPError: If the websocket connection is not established or if the HTTP request fails.
+
+        Example:
+            generate([
+                {'role': 'system', 'content': 'You are a helpful assistant.'},
+                {'role': 'user', 'content': 'Who won the world series in 2020?'},
+                {'role': 'assistant', 'content': 'The Los Angeles Dodgers won the World Series in 2020.'},
+                {'role': 'user', 'content': 'Where was it played?'}
+            ])
+        """
+        prompt: str = self.create_prompt(messages=messages)
+        url: tuple[str] = (f"{self.agent_url}/api/v2/generate",)
+        preflight: Dict[str, Any] = {
             "url": url,
             "type": "openinference_session",
             "max_size": 4096,
         }
-        payload = {
+        payload: Dict[str, str] = {
             "type": "openinference_session",
             "prompt": prompt,
         }
         try:
             if not self.web_socket:
-                raise HTTPError("Websocket connection not established")
-            self.web_socket.send(json.dumps(preflight))
-            self.web_socket.send(json.dumps(payload))
+                raise HTTPError(message="Websocket connection not established")
+            self.web_socket.send(message=json.dumps(obj=preflight))
+            self.web_socket.send(message=json.dumps(obj=payload))
             while self.web_socket.receive():
                 message = self.web_socket.receive()
                 if message is None:
                     break
-                yield json.loads(message)
+                yield json.loads(s=message)
             self.web_socket.close()
         except HTTPError as e:
-            raise HTTPError("HTTP request failed") from e
+            raise HTTPError(message="HTTP request failed") from e
 
-    def create_prompt(self, messages: List[Dict[str, str]]):
+    def create_prompt(self, messages: List[Dict[str, str]]) -> str:
         """
         Creates a prompt string from a list of dictionaries representing messages.
 
@@ -211,7 +238,7 @@ class AgentArtificial(Agent):
             # Returns:
             # 'system\nYou are a helpful assistant.\nuser\nWho won the world series in 2020?\nassistant\nThe Los Angeles Dodgers won the World Series in 2020.\nuser\nWhere was it played?'
         """
-        prompt = ""
+        prompt: str = ""
         for message in messages:
             prompt += f"{message['role']}\n"
             prompt += f"{message['content']}\n"
@@ -227,6 +254,17 @@ class AgentArtificial(Agent):
         return self.web_socket
 
     def get_openai_client(self) -> OpenAI:
+        """
+        Get an instance of the OpenAI client.
+
+        This function initializes an instance of the OpenAI client and sets its API key. If the client cannot be loaded correctly, a ValueError is raised.
+
+        Returns:
+            OpenAI: An instance of the OpenAI client.
+
+        Raises:
+            ValueError: If the client cannot be loaded correctly.
+        """
         self.openai = OpenAI()
         self.openai.api_key = self.choose_api_key()
         if not self.openai:
@@ -234,21 +272,53 @@ class AgentArtificial(Agent):
         return self.openai
 
     def choose_api_key(self) -> str:
+        """
+        Choose the API key based on the value of `is_inference`.
+
+        This function determines the API key to use based on the value of `is_inference`. If `is_inference` is `True`, it returns the value of the environment variable "AGENTARTIFICIAL_API_KEY" as a string. Otherwise, it returns the value of the environment variable "OPENAI_API_KEY" as a string.
+
+        Returns:
+            str: The chosen API key.
+
+        """
         if self.is_inference:
-            return str(os.getenv("AGENTARTIFICIAL_API_KEY"))
-        return str(os.getenv("OPENAI_API_KEY"))
+            return str(object=os.getenv(key="AGENTARTIFICIAL_API_KEY"))
+        return str(object=os.getenv(key="OPENAI_API_KEY"))
 
     def choose_model(self) -> str:
+        """
+        Choose model from OPENAI_MODEL or AGENTARTIFICIAL_MODEL
+        """
         if self.is_inference:
-            return str(os.getenv("AGENTARTIFICIAL_MODEL"))
-        return str(os.getenv("OPENAI_MODEL"))
+            return str(object=os.getenv(key="AGENTARTIFICIAL_MODEL"))
+        return str(object=os.getenv(key="OPENAI_MODEL"))
 
     def choose_base_url(self) -> str:
+        """
+        Choose the base URL based on the value of `is_inference`.
+
+        This function determines the base URL to use based on the value of `is_inference`. If `is_inference` is `True`, it returns the value of the environment variable "AGENTARTIFICIAL_URL" as a string. Otherwise, it returns the value of the environment variable "OPENAI_URL" as a string.
+
+        Returns:
+            str: The chosen base URL.
+
+        """
         if self.is_inference:
-            return str(os.getenv("AGENTARTIFICIAL_URL"))
-        return str(os.getenv("OPENAI_URL"))
+            return str(object=os.getenv(key="AGENTARTIFICIAL_URL"))
+        return str(object=os.getenv(key="OPENAI_URL"))
 
     def __del__(self) -> None:
+        """
+        Closes the web socket connection and the OpenAI client if they exist.
+
+        This method is called when the object is about to be destroyed. It checks if the `web_socket` attribute is not `None` and if so, it calls the `close()` method on it to close the web socket connection. Then, it checks if the `openai` attribute is not `None` and if so, it calls the `close()` method on it to close the OpenAI client.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
         if self.web_socket:
             self.web_socket.close()
 
