@@ -4,7 +4,8 @@ fastapi
 uvicorn
 requests
 loguru
-
+##-e git+https://github.com/websocket-client/websocket-client#egg=websocket
+websocket-client
 #development
 #black
 #pytest
