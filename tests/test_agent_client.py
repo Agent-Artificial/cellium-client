@@ -97,7 +97,6 @@ class TestclientClient(unittest.TestCase):
         self.assertEqual(first=result, second=expected_result)
 
     def test_chat_completions(self) -> None:
-        self.client.__del__()
         os.environ["AGENTARTIFICIAL_API_KEY"] = ""
         os.environ["OPENAI_API_KEY"] = str(object=self.openai_api_key)
         self.client.model = str(object=self.client.choose_model())

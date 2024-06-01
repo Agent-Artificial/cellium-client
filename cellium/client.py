@@ -49,7 +49,6 @@ class Client(BaseModel, ABC):
     openai_url: str
     openai_api_key: str
     openai_model: str
-    web_socket: Optional[WebSocket]
     openai: OpenAI
     is_inference: bool
     base_url: str
@@ -57,9 +56,10 @@ class Client(BaseModel, ABC):
     model: str
     completion: Completion
     chat: Chat
+    web_socket: WebSocket
     is_inference: bool
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    __pydantic_fields_set__: set[str] = {"is_inference"}
+    __pydantic_fields_set__: set[str] = {"is_inference", "Chat", "Completion", "webs_socket"}
+    model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
     @abstractmethod
     def choose_model(self) -> Union[str, None]:
@@ -136,9 +136,10 @@ class CelliumClient(Client):
         self.api_key = self.choose_api_key()
         self.model = self.choose_model()
         self.openai = self.get_openai_client() or openai
-        self.web_socket = None
+        self.web_socket = WebSocket(environ=os.environ, socket=WebSocket, rfile=None)
         self.completion = Completion(create=self.create)
         self.chat = Chat(completions=self.completion)
+        
         super().__init__(
             agent_url=self.agent_url,
             agent_api_key=self.agent_api_key,
@@ -307,20 +308,4 @@ class CelliumClient(Client):
             return str(object=os.getenv(key="AGENTARTIFICIAL_URL"))
         return str(object=os.getenv(key="OPENAI_URL"))
 
-    def __del__(self) -> None:
-        """
-        Closes the web socket connection and the OpenAI client if they exist.
-
-        This method is called when the object is about to be destroyed. It checks if the `web_socket` attribute is not `None` and if so, it calls the `close()` method on it to close the web socket connection. Then, it checks if the `openai` attribute is not `None` and if so, it calls the `close()` method on it to close the OpenAI client.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
-        if self.web_socket:
-            self.web_socket.close()
-
-        if self.openai:
-            self.openai.close()
+   
