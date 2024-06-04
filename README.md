@@ -38,3 +38,9 @@ message = response['data']['choices'][0]['message']['content']
 
 
 ```
+
+
+## Diagnosis 
+
+check the connection
+`websocat  wss://inference.cillium.dev.compute.agentartificial.com/api/v2/generate`

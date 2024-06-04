@@ -4,7 +4,13 @@ from httpx import HTTPError
 import typing
 from abc import ABC, abstractmethod
 from openai import OpenAI
+import websocket
+#mport websocket._core
 from websocket import WebSocket
+#ebSocket = websocket._core.WebSocket
+
+websocket.enableTrace(True)
+
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, List, Optional, Union, Any, Callable, Generator
 
@@ -137,6 +143,7 @@ class CelliumClient(Client):
         self.model = self.choose_model()
         self.openai = self.get_openai_client() or openai
         self.web_socket = WebSocket(environ=os.environ, socket=WebSocket, rfile=None)
+
         self.completion = Completion(create=self.create)
         self.chat = Chat(completions=self.completion)
         
@@ -195,26 +202,40 @@ class CelliumClient(Client):
             ])
         """
         prompt: str = self.create_prompt(messages=messages)
-        url: tuple[str] = (f"{self.agent_url}/api/v2/generate",)
+        url: str = f"{self.agent_url}/api/v2/generate"
         preflight: Dict[str, Any] = {
             "url": url,
-            "type": "openinference_session",
-            "max_size": 4096,
+            "type": "open_inference_session",
+            "model": self.model,
+            "max_length": 2028,
         }
         payload: Dict[str, str] = {
-            "type": "openinference_session",
+            "type": "generate",
             "prompt": prompt,
         }
         try:
-            if not self.web_socket:
+#            import pdb
+#            pdb.set_trace()
+            self.web_socket.connect(url)
+            if not self.web_socket.connected:
                 raise HTTPError(message="Websocket connection not established")
-            self.web_socket.send(message=json.dumps(obj=preflight))
-            self.web_socket.send(message=json.dumps(obj=payload))
-            while self.web_socket.receive():
-                message = self.web_socket.receive()
-                if message is None:
+#            import pdb
+#            pdb.set_trace()
+            #self.web_socket.send(json.dumps(obj=preflight))
+            self.web_socket.send(str(json.dumps(obj=preflight)))
+            self.web_socket.send(str(json.dumps(obj=payload)))
+            while self.web_socket.recv():
+                message = self.web_socket.recv()
+                print("MESSAGE",message)
+                if message == "":
                     break
-                yield json.loads(s=message)
+
+                data = json.loads(s=message)
+                if "stop" in data:
+                    if data["stop"]:
+                        break
+                yield data
+                #RESPONSE {'ok': True, 'outputs': '<s> Q: Let h(g) = 2*g**2 - 11*', 'stop': True, 'token_count': 20}
             self.web_socket.close()
         except HTTPError as e:
             raise HTTPError(message="HTTP request failed") from e
@@ -246,13 +267,13 @@ class CelliumClient(Client):
 
         return prompt
 
-    def connect(self) -> WebSocket:
-        """
-        Connects to a WebSocket using the provided environment variables and creates a WebSocket object.
-        Returns the WebSocket object.
-        """
-        self.web_socket = WebSocket(environ=os.environ, socket=WebSocket, rfile=None)
-        return self.web_socket
+    # def connect(self) -> WebSocket:
+    #     """
+    #     Connects to a WebSocket using the provided environment variables and creates a WebSocket object.
+    #     Returns the WebSocket object.
+    #     """
+    #     self.web_socket = WebSocket(environ=os.environ, socket=WebSocket, rfile=None)
+    #     return self.web_socket
 
     def get_openai_client(self) -> OpenAI:
         """
