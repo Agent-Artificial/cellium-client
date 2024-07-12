@@ -39,6 +39,9 @@ class TestclientClient(unittest.TestCase):
         ]
         self.model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    def test_is_inference(self):
+        self.assertEqual(first=self.client.is_inference, second=False)
+
     def test_check_setup(self) -> None:
         self.assertIsInstance(obj=self.client, cls=CelliumClient)
         self.assertIsInstance(obj=self.openai, cls=OpenAI)

@@ -4,7 +4,7 @@ from httpx import HTTPError
 import typing
 from abc import ABC, abstractmethod
 from openai import OpenAI
-from websocket import WebSocket
+import httpx
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, List, Optional, Union, Any, Callable, Generator
 
@@ -56,9 +56,14 @@ class Client(BaseModel, ABC):
     model: str
     completion: Completion
     chat: Chat
-    web_socket: WebSocket
+    web_socket: httpx.AsyncClient
     is_inference: bool
-    __pydantic_fields_set__: set[str] = {"is_inference", "Chat", "Completion", "webs_socket"}
+    __pydantic_fields_set__: set[str] = {
+        "is_inference",
+        "Chat",
+        "Completion",
+        "webs_socket",
+    }
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
     @abstractmethod
@@ -136,10 +141,10 @@ class CelliumClient(Client):
         self.api_key = self.choose_api_key()
         self.model = self.choose_model()
         self.openai = self.get_openai_client() or openai
-        self.web_socket = WebSocket(environ=os.environ, socket=WebSocket, rfile=None)
+        self.web_socket = httpx.AsyncClient(base_url=self.base_url)
         self.completion = Completion(create=self.create)
         self.chat = Chat(completions=self.completion)
-        
+
         super().__init__(
             agent_url=self.agent_url,
             agent_api_key=self.agent_api_key,
@@ -246,12 +251,12 @@ class CelliumClient(Client):
 
         return prompt
 
-    def connect(self) -> WebSocket:
+    def connect(self):
         """
         Connects to a WebSocket using the provided environment variables and creates a WebSocket object.
         Returns the WebSocket object.
         """
-        self.web_socket = WebSocket(environ=os.environ, socket=WebSocket, rfile=None)
+        httpx.AsyncClient(base_url=self.agent_url).
         return self.web_socket
 
     def get_openai_client(self) -> OpenAI:
@@ -307,5 +312,3 @@ class CelliumClient(Client):
         if self.is_inference:
             return str(object=os.getenv(key="AGENTARTIFICIAL_URL"))
         return str(object=os.getenv(key="OPENAI_URL"))
-
-   
